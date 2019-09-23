@@ -28,6 +28,9 @@ const (
 
 // KfDef is the Schema for the applications API
 // +k8s:openapi-gen=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:path=kfdefs,shortName=kfdef
+// +kubebuilder:storageversion
 type KfDef struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -42,15 +45,32 @@ type KfDef struct {
 type KfDefList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
+	// +listType=set
 	Items           []KfDef `json:"items"`
 }
 
 type KfDefSpec struct {
 	Version      string        `json:"version,omitempty"`
-	Applications []Application `json:"applications,omitempty"`
-	Plugins      []Plugin      `json:"plugins,omitempty"`
-	Secrets      []Secret      `json:"secrets,omitempty"`
-	Repos        []Repo        `json:"repos,omitempty"`
+	// +listType=map
+	// +listMapKey=name
+	// +patchStrategy=merge
+	// +patchMergeKey=name
+	Applications []Application `json:"applications,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
+	// +listType=map
+	// +listMapKey=name
+	// +patchStrategy=merge
+	// +patchMergeKey=name
+	Plugins []Plugin `json:"plugins,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
+	// +listType=map
+	// +listMapKey=name
+	// +patchStrategy=merge
+	// +patchMergeKey=name
+	Secrets []Secret `json:"secrets,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
+	// +listType=map
+	// +listMapKey=name
+	// +patchStrategy=merge
+	// +patchMergeKey=name
+	Repos []Repo `json:"repos,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 // Application defines an application to install
@@ -60,9 +80,14 @@ type Application struct {
 }
 
 type KustomizeConfig struct {
-	RepoRef    *RepoRef    `json:"repoRef,omitempty"`
-	Overlays   []string    `json:"overlays,omitempty"`
-	Parameters []NameValue `json:"parameters,omitempty"`
+	RepoRef  *RepoRef `json:"repoRef,omitempty"`
+	// +listType=set
+	Overlays []string `json:"overlays,omitempty"`
+	// +listType=map
+	// +listMapKey=name
+	// +patchStrategy=merge
+	// +patchMergeKey=name
+	Parameters []NameValue `json:"parameters,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 type RepoRef struct {
@@ -75,10 +100,20 @@ type NameValue struct {
 	Value string `json:"value,omitempty"`
 }
 
+type TypeMeta struct {
+	Kind       string `json:"kind,omitempty" yaml:"kind,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
+}
+
+type ObjectMeta struct {
+	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+}
+
 // Plugin can be used to customize the generation and deployment of Kubeflow
 type Plugin struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	TypeMeta   `json:",inline"`
+	ObjectMeta `json:"metadata,omitempty"`
 
 	Spec *runtime.RawExtension `json:"spec,omitempty"`
 }
@@ -100,7 +135,7 @@ type LiteralSource struct {
 }
 
 type EnvSource struct {
-	Name string `json:"Name,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 // SecretRef is a reference to a secret
@@ -122,9 +157,17 @@ type Repo struct {
 
 // KfDefStatus defines the observed state of KfDef
 type KfDefStatus struct {
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
 	Conditions []KfDefCondition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 	// ReposCache is used to cache information about local caching of the URIs.
-	ReposCache []RepoCache `json:"reposCache,omitempty"`
+	// +listType=map
+	// +listMapKey=name
+	// +patchStrategy=merge
+	// +patchMergeKey=name
+	ReposCache []RepoCache `json:"reposCache,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 type RepoCache struct {

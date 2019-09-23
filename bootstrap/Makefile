@@ -23,8 +23,6 @@ KFCTL_IMG ?= gcr.io/$(GCLOUD_PROJECT)/kfctl
 # We use --always because otherwise when we clone with shallow depth we might not get
 # any tags and it will fail.
 TAG ?= $(eval TAG := $(shell git describe --tags --always --long))$(TAG)
-REPO ?= $(shell echo $$(git config --get remote.origin.url) | sed 's/git@\(.*\):\(.*\).git$$/https:\/\/\1\/\2/')
-BRANCH ?= $(shell git branch | grep '^*' | awk '{print $$2}')
 KFCTL_TARGET ?= kfctl
 MOUNT_KUBE ?=  -v $(HOME)/.kube:/root/.kube 
 MOUNT_GCP ?=  -v $(HOME)/.config:/root/.config 
@@ -70,41 +68,53 @@ vet:
 	@${GO} vet ./config ./cmd/... ./pkg/...
 
 generate:
-	@${GO} generate ./config ./pkg/apis/apps/kfdef/... ./pkg/apis/apps/kfupgrade/... ./pkg/utils/... ./pkg/kfapp/minikube ./pkg/kfapp/gcp/... ./pkg/kfupgrade/... ./cmd/kfctl/...
+	@${GO} generate ./config ./pkg/apis/apps/kfdef/... ./pkg/utils/... ./pkg/kfapp/minikube ./pkg/kfapp/gcp/... ./cmd/kfctl/...
 
 ${GOPATH}/bin/deepcopy-gen:
 	GO111MODULE=off ${GO} get k8s.io/code-generator/cmd/deepcopy-gen
 
-config/zz_generated.deepcopy.go: config/types.go
-	${GOPATH}/bin/deepcopy-gen -i github.com/kubeflow/kubeflow/bootstrap/v3/config -O zz_generated.deepcopy && \
+${GOPATH}/bin/controller-gen:
+	GO111MODULE=off ${GO} get sigs.k8s.io/controller-tools/cmd/controller-gen
+
+${GOPATH}/bin/openapi-gen:
+	GO111MODULE=off ${GO} get k8s.io/kube-openapi/cmd/openapi-gen
+
+clean-generated:
+	rm -f ${GOPATH}/bin/deepcopy-gen
+	rm -f ${GOPATH}/bin/controller-gen
+	rm -f ${GOPATH}/bin/openapi-gen
+	rm -f config/zz_generated.deepcopy.go
+	rm -f config/base/kfdef.apps.kubeflow.org_kfdefs.yaml
+	rm -f pkg/apis/apps/kfdef/v1alpha1/zz_generated.deepcopy.go
+	rm -f pkg/apis/apps/kfdef/v1beta1/zz_generated.deepcopy.go
+	rm -f pkg/generated/kfdef/v1beta1/openapi_generated.go
+
+config/zz_generated.deepcopy.go: ${GOPATH}/bin/deepcopy-gen config/types.go
+	GO111MODULE=on ${GOPATH}/bin/deepcopy-gen -i github.com/kubeflow/kubeflow/bootstrap/v3/config -O zz_generated.deepcopy && \
 	mv v3/config/zz_generated.deepcopy.go config/ && rm -rf v3
 
-pkg/apis/apps/kfdef/v1alpha1/zz_generated.deepcopy.go: pkg/apis/apps/kfdef/v1alpha1/application_types.go
-	${GOPATH}/bin/deepcopy-gen -i github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfdef/... -O zz_generated.deepcopy && \
-	mv ${GOPATH}/src/github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfdef/v1alpha1/zz_generated.deepcopy.go pkg/apis/apps/kfdef/v1alpha1/ && rm -rf v3
+config/base/kfdef.apps.kubeflow.org_kfdefs.yaml: ${GOPATH}/bin/controller-gen config/types.go pkg/apis/apps/kfdef/v1alpha1/application_types.go pkg/apis/apps/kfdef/v1beta1/application_types.go
+	GO111MODULE=on ${GOPATH}/bin/controller-gen crd paths=./pkg/apis/apps/kfdef/v1beta1/...  output:crd:dir=./config/base output:none
 
-pkg/apis/apps/kfdef/v1beta1/zz_generated.deepcopy.go: pkg/apis/apps/kfdef/v1beta1/application_types.go
-	${GOPATH}/bin/deepcopy-gen -i github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfdef/... -O zz_generated.deepcopy && \
-	mv ${GOPATH}/src/github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfdef/v1beta1/zz_generated.deepcopy.go pkg/apis/apps/kfdef/v1beta1/ && rm -rf v3
+pkg/apis/apps/kfdef/v1alpha1/zz_generated.deepcopy.go: ${GOPATH}/bin/controller-gen pkg/apis/apps/kfdef/v1alpha1/application_types.go
+	GO111MODULE=on ${GOPATH}/bin/controller-gen object paths=./pkg/apis/apps/kfdef/v1alpha1/... output:object:dir=./pkg/apis/apps/kfdef/v1alpha1/ output:none
 
-pkg/apis/apps/kfupgrade/v1alpha1/zz_generated.deepcopy.go: pkg/apis/apps/kfupgrade/v1alpha1/application_types.go
-	${GOPATH}/bin/deepcopy-gen -i github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfupgrade/... -O zz_generated.deepcopy && \
-	mv ${GOPATH}/src/github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfupgrade/v1alpha1/zz_generated.deepcopy.go pkg/apis/apps/kfupgrade/v1alpha1/ && rm -rf v3
+pkg/apis/apps/kfdef/v1beta1/zz_generated.deepcopy.go: ${GOPATH}/bin/controller-gen pkg/apis/apps/kfdef/v1beta1/application_types.go
+	GO111MODULE=on ${GOPATH}/bin/controller-gen object paths=./pkg/apis/apps/kfdef/v1beta1/... output:object:dir=./pkg/apis/apps/kfdef/v1beta1/ output:none
 
-pkg/apis/apps/kfconfig/zz_generated.deepcopy.go: pkg/apis/apps/kfconfig/types.go
-	${GOPATH}/bin/deepcopy-gen -i github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfconfig/... -O zz_generated.deepcopy && \
-	mv ${GOPATH}/src/github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfconfig/zz_generated.deepcopy.go pkg/apis/apps/kfconfig/ && rm -rf v3
+pkg/generated/kfdef/v1beta1/openapi_generated.go: ${GOPATH}/bin/openapi-gen
+	Go111MODULE=on ${GOPATH}/bin/openapi-gen -i "k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/apis/meta/v1,github.com/kubeflow/kubeflow/bootstrap/v3/pkg/apis/apps/kfdef/v1beta1" \
+		-o pkg/generated/kfdef -p v1beta1 -O openapi_generated -r ./v1beta1.report
 
-deepcopy: ${GOPATH}/bin/deepcopy-gen config/zz_generated.deepcopy.go pkg/apis/apps/kfdef/v1alpha1/zz_generated.deepcopy.go pkg/apis/apps/kfdef/v1beta1/zz_generated.deepcopy.go \
-	pkg/apis/apps/kfconfig/zz_generated.deepcopy.go pkg/apis/apps/kfupgrade/v1alpha1/zz_generated.deepcopy.go
+deepcopy: ${GOPATH}/bin/deepcopy-gen ${GOPATH}/bin/controller-gen ${GOPATH}/bin/openapi-gen config/base/kfdef.apps.kubeflow.org_kfdefs.yaml config/zz_generated.deepcopy.go pkg/apis/apps/kfdef/v1alpha1/zz_generated.deepcopy.go pkg/apis/apps/kfdef/v1beta1/zz_generated.deepcopy.go pkg/generated/kfdef/v1beta1/openapi_generated.go
 
-build-bootstrap: deepcopy generate fmt vet
+build-bootstrap: generate fmt vet
 	${GO} build -gcflags '-N -l' -o bin/bootstrapper cmd/bootstrap/main.go
 
-build-kfctl: deepcopy generate fmt vet
+build-kfctl: generate fmt vet
 	${GO} build -gcflags '-N -l' -ldflags "-X main.VERSION=$(TAG)" -o bin/kfctl cmd/kfctl/main.go
 
-build-gc: deepcopy generate fmt vet
+build-gc: generate fmt vet
 	${GO} build -gcflags '-N -l' -ldflags "-X main.VERSION=$(TAG)" -o bin/gc cmd/gc/main.go
 
 # Release tarballs suitable for upload to GitHub release pages
@@ -114,7 +124,7 @@ build-kfctl-tgz: build-kfctl
 	cd bin && tar -cvzf kfctl_$(TAG)_linux.tar.gz ./kfctl
 	cp -f ./bin/kfctl_$(TAG)_linux.tar.gz ./bin/kfctl_$(TAG)_darwin.tar.gz
 
-build-kfctl-client: /tmp/v2 deepcopy generate fmt vet
+build-kfctl-client: /tmp/v2 generate fmt vet
 	${GO} build -gcflags 'all=-N -l' -ldflags "-X main.VERSION=$(TAG)" -o bin/kfctlClient cmd/kfctlClient/main.go
 
 # push the releases to a GitHub page
@@ -134,8 +144,6 @@ push-to-github-release: build-kfctl-tgz
 
 build-kfctl-container:
 	DOCKER_BUILDKIT=1 docker build \
-                --build-arg REPO="$(REPO)" \
-                --build-arg BRANCH=$(BRANCH) \
 		--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
 		--build-arg VERSION=$(TAG) \
 		--target=$(KFCTL_TARGET) \
